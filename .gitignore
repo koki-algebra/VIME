@@ -1,0 +1,8 @@
+# for MacOS
+.DS_Store
+
+# for Python
+__pycache__
+
+# others
+data
