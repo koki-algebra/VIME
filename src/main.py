@@ -1,8 +1,9 @@
 import torch
 from torch.utils.data import DataLoader
+from torch.nn import CrossEntropyLoss
 
 from datasets import UCIIncome
-from vime import SelfSLNetworks, SelfSLLoss, self_train
+from vime import SelfSLNetworks, SelfSLLoss, self_train, SemiSLNetworks, SemiSLLoss, semi_train, semi_test
 
 
 if __name__ == "__main__":
@@ -39,18 +40,22 @@ if __name__ == "__main__":
 
     # number of features
     num_features = X_l_train.shape[1]
+    dim_z = num_features * 2
+    dim_y = 2
 
     # hyperparameters
     learning_rate = 1e-3
-    epochs = 20
-    p_m = 0.2
-    alpha = 3.0
-    beta = 3.0
+    epochs        = 20
+    p_m           = 0.2
+    alpha         = 3.0
+    beta          = 3.0
+    K             = 10
+
 
 
     # -------- Self Supvervised leaning --------
     # model
-    self_model = SelfSLNetworks(dim_x=num_features, dim_z=num_features*2)
+    self_model = SelfSLNetworks(dim_x=num_features, dim_z=dim_z)
 
     # loss function
     loss_fn = SelfSLLoss(alpha)
@@ -75,3 +80,38 @@ if __name__ == "__main__":
 
     # save weights of the encoder
     torch.save(encoder.state_dict(), "encoder_weights.pth")
+
+
+    # -------- Semi-Supervised Learning --------
+    # fix encoder parameters
+    for param in encoder.parameters():
+        param.requires_grad = False
+
+    # model
+    semi_model = SemiSLNetworks(encoder=encoder, dim_z=dim_z, dim_y=2)
+
+    # loss function
+    loss_fn = SemiSLLoss(beta=beta)
+    test_loss_fn = CrossEntropyLoss()
+
+    # optimizer
+    optimizer = torch.optim.Adam(params=semi_model.parameters(), lr=learning_rate)
+
+    # training & test
+    for t in range(epochs):
+        print(f"Epoch {t+1}\n-------------------------------")
+        semi_train(
+            labeled_dataloader=train_labeled_dataloader,
+            unlabeled_dataloader=train_unlabeled_dataloader,
+            loss_fn=loss_fn,
+            model=semi_model,
+            optimizer=optimizer,
+            p_m=p_m,
+            K=K
+        )
+        semi_test(
+            dataloader=test_dataloader,
+            model=semi_model,
+            loss_fn=test_loss_fn
+        )
+    print("Done!")
