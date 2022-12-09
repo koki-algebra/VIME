@@ -16,15 +16,15 @@ if __name__ == "__main__":
     # dataloader
     train_labeled_dataloader = DataLoader(
         dataset=train_labeled_dataset,
-        batch_size=64
+        batch_size=128
     )
     train_unlabeled_dataloader = DataLoader(
         dataset=train_unlabeled_dataset,
-        batch_size=256
+        batch_size=1152
     )
     test_dataloader = DataLoader(
         dataset=test_dataset,
-        batch_size=64
+        batch_size=128
     )
 
     print("Number of each data")
