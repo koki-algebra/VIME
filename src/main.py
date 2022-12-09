@@ -1,6 +1,9 @@
+import torch
 from torch.utils.data import DataLoader
 
 from datasets import UCIIncome
+from vime import SelfSLNetworks, SelfSLLoss, self_train
+
 
 if __name__ == "__main__":
     # dataset
@@ -32,3 +35,43 @@ if __name__ == "__main__":
     print(f"train labeled   : {len(train_labeled_dataloader)}")
     print(f"train unlabeled : {len(train_unlabeled_dataloader)}")
     print(f"test            : {len(test_dataloader)}")
+
+
+    # number of features
+    num_features = X_l_train.shape[1]
+
+    # hyperparameters
+    learning_rate = 1e-3
+    epochs = 20
+    p_m = 0.2
+    alpha = 3.0
+    beta = 3.0
+
+
+    # -------- Self Supvervised leaning --------
+    # model
+    self_model = SelfSLNetworks(dim_x=num_features, dim_z=num_features*2)
+
+    # loss function
+    loss_fn = SelfSLLoss(alpha)
+
+    # optimizer
+    optimizer = torch.optim.Adam(params=self_model.parameters(), lr=learning_rate)
+
+    # training
+    for t in range(epochs):
+        print(f"Epoch {t+1}\n-------------------------------")
+        self_train(
+            dataloader=train_unlabeled_dataloader,
+            model=self_model,
+            loss_fn=loss_fn,
+            optimizer=optimizer,
+            p_m=p_m
+        )
+    print("Done!")
+
+    # get trained encoder
+    encoder = self_model.get_encoder()
+
+    # save weights of the encoder
+    torch.save(encoder.state_dict(), "encoder_weights.pth")
