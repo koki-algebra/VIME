@@ -1,8 +1,8 @@
-from typing import List
+from typing import List, Dict
 import torch
-from torch.optim import Optimizer
+from torch.optim import Optimizer, Adam
 from torch import nn, Tensor
-from torch.utils.data import DataLoader
+from torch.utils.data import Dataset, DataLoader
 from torch.nn.functional import softmax
 
 from utils.pretext_generator import pretext_generator
@@ -29,6 +29,65 @@ class SemiSLNetworks(nn.Module):
         logits = self.predictor(Z)
         return logits
 
+    def fit(self, labeled_dataset: Dataset, unlabeled_dataset: Dataset, test_dataset: Dataset, hyperparams: Dict[str, float | int]) -> None:
+        labeled_batch_size  : int   = hyperparams["labeled_batch_size"]
+        unlabeled_batch_size: int   = hyperparams["unlabeled_batch_size"]
+        learning_rate       : float = hyperparams["lr"]
+        epochs              : float = hyperparams["epochs"]
+        p_m                 : float = hyperparams["p_m"]
+        beta                : float = hyperparams["beta"]
+        K                   : int   = hyperparams["K"]
+
+        if beta < 0.0:
+            raise ValueError("beta must be greater than 0.0")
+        if K < 0:
+            raise ValueError("K must be grater than 0")
+
+        # model
+        model = self
+        # loss function
+        loss_fn = SemiSLLoss(beta)
+        test_loss_fn = torch.nn.CrossEntropyLoss()
+        # optimizer
+        optimizer = Adam(params=model.parameters(), lr=learning_rate)
+
+        # data loader
+        labeled_dataloader = DataLoader(
+            dataset=labeled_dataset,
+            batch_size=labeled_batch_size
+        )
+        unlabeled_dataloader = DataLoader(
+            dataset=unlabeled_dataset,
+            batch_size=unlabeled_batch_size
+        )
+        test_dataloader = DataLoader(
+            dataset=test_dataset,
+            batch_size=labeled_batch_size
+        )
+
+        # fix encoder parameters
+        for param in self.encoder.parameters():
+            param.requires_grad = False
+
+        # training & test
+        for t in range(epochs):
+            print(f"Epoch {t+1}\n-------------------------------")
+            train(
+                labeled_dataloader=labeled_dataloader,
+                unlabeled_dataloader=unlabeled_dataloader,
+                loss_fn=loss_fn,
+                model=model,
+                optimizer=optimizer,
+                p_m=p_m,
+                K=K
+            )
+            test(
+                dataloader=test_dataloader,
+                model=model,
+                loss_fn=test_loss_fn
+            )
+        print("Done!")
+
 
 class SemiSLLoss(nn.Module):
     def __init__(self, beta: float) -> None:
@@ -42,7 +101,7 @@ class SemiSLLoss(nn.Module):
         return supervised_loss(y_pred, y_target) + self.beta * unsupervised_loss(unlabeled_y_tilde_pred, unlabeled_y_pred)
 
 
-def semi_train(labeled_dataloader: DataLoader, unlabeled_dataloader: DataLoader, model: SemiSLNetworks, loss_fn: SemiSLLoss, optimizer: Optimizer, p_m: float, K: int) -> None:
+def train(labeled_dataloader: DataLoader, unlabeled_dataloader: DataLoader, model: SemiSLNetworks, loss_fn: SemiSLLoss, optimizer: Optimizer, p_m: float, K: int) -> None:
     size = len(labeled_dataloader.dataset)
     model.train()
     for batch, (X_l, y) in enumerate(labeled_dataloader):
@@ -81,7 +140,7 @@ def semi_train(labeled_dataloader: DataLoader, unlabeled_dataloader: DataLoader,
             print(f"loss: {loss.item():>7f}  [{current:>5d}/{size:>5d}]")
 
 
-def semi_test(dataloader: DataLoader, model: SemiSLNetworks, loss_fn: nn.CrossEntropyLoss):
+def test(dataloader: DataLoader, model: SemiSLNetworks, loss_fn: nn.CrossEntropyLoss) -> None:
     size = len(dataloader.dataset) # type: ignore
     num_batches = len(dataloader)
     test_loss, correct = 0, 0

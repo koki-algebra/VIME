@@ -1,9 +1,7 @@
 import torch
-from torch.utils.data import DataLoader
-from torch.nn import CrossEntropyLoss
 
 from datasets import UCIIncome
-from vime import SelfSLNetworks, SelfSLLoss, self_train, SemiSLNetworks, SemiSLLoss, semi_train, semi_test
+from vime import SelfSLNetworks, SemiSLNetworks
 
 
 if __name__ == "__main__":
@@ -13,67 +11,33 @@ if __name__ == "__main__":
     train_unlabeled_dataset = UCIIncome(X=X_u_train)
     test_dataset            = UCIIncome(X=X_test, y=y_test)
 
-    # dataloader
-    train_labeled_dataloader = DataLoader(
-        dataset=train_labeled_dataset,
-        batch_size=128
-    )
-    train_unlabeled_dataloader = DataLoader(
-        dataset=train_unlabeled_dataset,
-        batch_size=1152
-    )
-    test_dataloader = DataLoader(
-        dataset=test_dataset,
-        batch_size=128
-    )
-
-    print("Number of each data")
-    print(f"train labeled   : {len(train_labeled_dataset)}")
-    print(f"train unlabeled : {len(train_unlabeled_dataset)}")
-    print(f"test            : {len(test_dataset)}")
-    print()
-    print("Number of each mini-batch")
-    print(f"train labeled   : {len(train_labeled_dataloader)}")
-    print(f"train unlabeled : {len(train_unlabeled_dataloader)}")
-    print(f"test            : {len(test_dataloader)}")
-
-
     # number of features
     num_features = X_l_train.shape[1]
     dim_z = num_features * 2
     dim_y = 2
 
     # hyperparameters
-    learning_rate = 1e-3
-    epochs        = 20
-    p_m           = 0.2
-    alpha         = 3.0
-    beta          = 3.0
-    K             = 10
-
-
+    self_hyperparams = {
+        "batch_size": 128,
+        "lr"        : 1e-3,
+        "epochs"    : 10,
+        "p_m"       : 0.4,
+        "alpha"     : 4.0
+    }
+    semi_hyperparams = {
+        "labeled_batch_size"  : 128,
+        "unlabeled_batch_size": 128 * 9,
+        "lr"                  : 1e-3,
+        "epochs"              : 20,
+        "p_m"                 : 0.4,
+        "beta"                : 1.5,
+        "K"                   : 5
+    }
 
     # -------- Self Supvervised leaning --------
     # model
     self_model = SelfSLNetworks(dim_x=num_features, dim_z=dim_z)
-
-    # loss function
-    loss_fn = SelfSLLoss(alpha)
-
-    # optimizer
-    optimizer = torch.optim.Adam(params=self_model.parameters(), lr=learning_rate)
-
-    # training
-    for t in range(epochs):
-        print(f"Epoch {t+1}\n-------------------------------")
-        self_train(
-            dataloader=train_unlabeled_dataloader,
-            model=self_model,
-            loss_fn=loss_fn,
-            optimizer=optimizer,
-            p_m=p_m
-        )
-    print("Done!")
+    self_model.fit(dataset=train_unlabeled_dataset, hyperparams=self_hyperparams)
 
     # get trained encoder
     encoder = self_model.get_encoder()
@@ -82,36 +46,12 @@ if __name__ == "__main__":
     torch.save(encoder.state_dict(), "encoder_weights.pth")
 
 
-    # -------- Semi-Supervised Learning --------
-    # fix encoder parameters
-    for param in encoder.parameters():
-        param.requires_grad = False
-
+    # # -------- Semi-Supervised Learning --------
     # model
     semi_model = SemiSLNetworks(encoder=encoder, dim_z=dim_z, dim_y=2)
-
-    # loss function
-    loss_fn = SemiSLLoss(beta=beta)
-    test_loss_fn = CrossEntropyLoss()
-
-    # optimizer
-    optimizer = torch.optim.Adam(params=semi_model.parameters(), lr=learning_rate)
-
-    # training & test
-    for t in range(epochs):
-        print(f"Epoch {t+1}\n-------------------------------")
-        semi_train(
-            labeled_dataloader=train_labeled_dataloader,
-            unlabeled_dataloader=train_unlabeled_dataloader,
-            loss_fn=loss_fn,
-            model=semi_model,
-            optimizer=optimizer,
-            p_m=p_m,
-            K=K
-        )
-        semi_test(
-            dataloader=test_dataloader,
-            model=semi_model,
-            loss_fn=test_loss_fn
-        )
-    print("Done!")
+    semi_model.fit(
+        labeled_dataset=train_labeled_dataset,
+        unlabeled_dataset=train_unlabeled_dataset,
+        test_dataset=test_dataset,
+        hyperparams=semi_hyperparams
+    )

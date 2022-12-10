@@ -1,9 +1,8 @@
-from typing import Tuple
+from typing import Tuple, Dict
 import torch.nn as nn
-import torch.nn.functional as F
-from torch import Tensor
-from torch.utils.data import DataLoader
-from torch.optim import Optimizer
+from torch import Tensor, sigmoid
+from torch.utils.data import Dataset, DataLoader
+from torch.optim import Optimizer, Adam
 
 from utils import pretext_generator
 
@@ -47,15 +46,56 @@ class SelfSLNetworks(nn.Module):
         # encode collapsed feature matrix
         Z: Tensor = self.encoder(X_tilde)
         # mask prediction
-        M_pred: Tensor = F.sigmoid(self.mask_estimator(Z))
+        M_pred: Tensor = sigmoid(self.mask_estimator(Z))
         # feature prediction
         X_pred: Tensor = self.feature_estimator(Z)
 
         # is normalization
         if self.is_norm:
-            X_pred = F.sigmoid(X_pred)
+            X_pred = sigmoid(X_pred)
 
         return M_pred, X_pred
+
+    def fit(self, dataset: Dataset, hyperparams: Dict[str, float | int]) -> None:
+        # hyperparams
+        batch_size   : int   = hyperparams["batch_size"]
+        learning_rate: float = hyperparams["lr"]
+        epochs       : int   = hyperparams["epochs"]
+        p_m          : float = hyperparams["p_m"]
+        alpha        : float = hyperparams["alpha"]
+
+        if batch_size < 0:
+            raise ValueError("batch size must be greater than 0")
+        if learning_rate < 0.0:
+            raise ValueError("learning rate must be greater than 0.0")
+        if epochs < 0:
+            raise ValueError("epochs must be greater than 0")
+        if p_m > 1.0 or p_m < 0.0:
+            raise ValueError("p_m must be greater than 0.0 and less than 1.0, e.g. p_m ∈ (0.0, 1.0)")
+        if alpha < 0.0:
+            raise ValueError("alpha must be greater than 0.0")
+
+        # model
+        model = self
+        # loss function
+        loss_fn = SelfSLLoss(alpha)
+        # optimizer
+        optimizer = Adam(params=model.parameters(), lr=learning_rate)
+
+        # data loader
+        dataloader = DataLoader(dataset, batch_size=batch_size)
+
+        # training
+        for t in range(epochs):
+            print(f"Epoch {t+1}\n-------------------------------")
+            train(
+                dataloader=dataloader,
+                model=model,
+                loss_fn=loss_fn,
+                optimizer=optimizer,
+                p_m=p_m
+            )
+        print("Done!")
 
     def get_encoder(self) -> nn.Module:
         return self.encoder
@@ -72,7 +112,7 @@ class SelfSLLoss(nn.Module):
         return mask_loss(M_pred, M_target) + self.alpha * feature_loss(X_pred, X_target)
 
 
-def self_train(dataloader: DataLoader, model: SelfSLNetworks, loss_fn: SelfSLLoss, optimizer: Optimizer, p_m = 0.2) -> None:
+def train(dataloader: DataLoader, model: SelfSLNetworks, loss_fn: SelfSLLoss, optimizer: Optimizer, p_m = 0.2) -> None:
     size = len(dataloader.dataset)  # type: ignore
     model.train()
     for batch, X in enumerate(dataloader):
