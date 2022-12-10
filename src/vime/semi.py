@@ -5,7 +5,7 @@ from torch import nn, Tensor
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.functional import softmax
 
-from utils.pretext_generator import pretext_generator
+from .pretext import pretext_generator
 
 
 class SemiSLNetworks(nn.Module):

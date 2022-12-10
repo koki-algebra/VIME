@@ -8,7 +8,7 @@ def pretext_generator(X: Tensor, p_m: float) -> Tuple[Tensor, Tensor]:
     # generate mask matrix
     mask = np.random.binomial(n=1, p=p_m, size=X.size())
     M = torch.from_numpy(mask.astype(np.float32)).clone()
-    
+
     # Randomly (and column-wise) shuffle data
     rows, cols = X.size()
     X_bar = torch.zeros(size=X.size())

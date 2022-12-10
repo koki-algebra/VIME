@@ -4,7 +4,7 @@ from torch import Tensor, sigmoid
 from torch.utils.data import Dataset, DataLoader
 from torch.optim import Optimizer, Adam
 
-from utils import pretext_generator
+from .pretext import pretext_generator
 
 
 class SelfSLNetworks(nn.Module):
