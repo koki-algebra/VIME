@@ -1,11 +1,9 @@
 {
-	"name": "Pytorch test",
+	"name": "Jupyter Data Science Notebooks (Community)",
 	"build": {
-		"dockerfile": "Dockerfile",
-		"context": ".",
-		"target": "cpu"
+		"dockerfile": "Dockerfile"
 	},
-	"workspaceFolder": "/workspaces/VIME",
+	"overrideCommand": false,
 
 	// Forward Jupyter port locally, mark required
 	"forwardPorts": [8888],
@@ -17,8 +15,7 @@
 		}
 	},
 
-	// GPU
-	// "runArgs": ["--gpus", "all"],
+	"runArgs": ["--gpus", "all"],
 
 	// Configure tool-specific properties.
 	"customizations": {
@@ -32,7 +29,7 @@
 			// Add the IDs of extensions you want installed when the container is created.
 			"extensions": [
 				"ms-python.python",
-				"ms-azuretools.vscode-docker"
+				"oderwat.indent-rainbow"
 			]
 		}
 	},

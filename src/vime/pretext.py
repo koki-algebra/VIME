@@ -4,14 +4,14 @@ from torch import Tensor
 from typing import Tuple
 
 
-def pretext_generator(X: Tensor, p_m: float) -> Tuple[Tensor, Tensor]:
+def pretext_generator(X: Tensor, p_m: float, device: str) -> Tuple[Tensor, Tensor]:
     # generate mask matrix
     mask = np.random.binomial(n=1, p=p_m, size=X.size())
-    M = torch.from_numpy(mask.astype(np.float32)).clone()
+    M = torch.from_numpy(mask.astype(np.float32)).clone().to(device)
 
     # Randomly (and column-wise) shuffle data
     rows, cols = X.size()
-    X_bar = torch.zeros(size=X.size())
+    X_bar = torch.zeros(size=X.size()).to(device)
     for i in range(cols):
         ids = torch.randperm(rows)
         X_bar[:, i] = X[ids, i]

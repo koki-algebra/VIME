@@ -15,13 +15,13 @@ class SelfSLNetworks(nn.Module):
         # encoder e: X -> Z
         self.encoder = nn.Sequential(
             nn.BatchNorm1d(dim_x),
-            nn.Linear(dim_x, dim_x*2),
+            nn.Linear(dim_x, dim_x * 2),
             nn.ReLU(),
-            nn.BatchNorm1d(dim_x*2),
-            nn.Linear(dim_x*2, dim_x*2),
+            nn.BatchNorm1d(dim_x * 2),
+            nn.Linear(dim_x * 2, dim_x * 2),
             nn.ReLU(),
-            nn.BatchNorm1d(dim_x*2),
-            nn.Linear(dim_x*2, dim_z)
+            nn.BatchNorm1d(dim_x * 2),
+            nn.Linear(dim_x * 2, dim_z),
         )
 
         # mask vector estimator s_m: Z -> {0,1}^d
@@ -56,13 +56,15 @@ class SelfSLNetworks(nn.Module):
 
         return M_pred, X_pred
 
-    def fit(self, dataset: Dataset, hyperparams: Dict[str, float | int]) -> None:
+    def fit(
+        self, dataset: Dataset, hyperparams: Dict[str, float | int], device: str
+    ) -> None:
         # hyperparams
-        batch_size   : int   = hyperparams["batch_size"]
+        batch_size: int = hyperparams["batch_size"]
         learning_rate: float = hyperparams["lr"]
-        epochs       : int   = hyperparams["epochs"]
-        p_m          : float = hyperparams["p_m"]
-        alpha        : float = hyperparams["alpha"]
+        epochs: int = hyperparams["epochs"]
+        p_m: float = hyperparams["p_m"]
+        alpha: float = hyperparams["alpha"]
 
         if batch_size < 0:
             raise ValueError("batch size must be greater than 0")
@@ -71,12 +73,14 @@ class SelfSLNetworks(nn.Module):
         if epochs < 0:
             raise ValueError("epochs must be greater than 0")
         if p_m > 1.0 or p_m < 0.0:
-            raise ValueError("p_m must be greater than 0.0 and less than 1.0, e.g. p_m ∈ (0.0, 1.0)")
+            raise ValueError(
+                "p_m must be greater than 0.0 and less than 1.0, e.g. p_m ∈ (0.0, 1.0)"
+            )
         if alpha < 0.0:
             raise ValueError("alpha must be greater than 0.0")
 
         # model
-        model = self
+        model = self.to(device)
         # loss function
         loss_fn = SelfSLLoss(alpha)
         # optimizer
@@ -93,7 +97,8 @@ class SelfSLNetworks(nn.Module):
                 model=model,
                 loss_fn=loss_fn,
                 optimizer=optimizer,
-                p_m=p_m
+                device=device,
+                p_m=p_m,
             )
         print("Done!")
 
@@ -106,18 +111,28 @@ class SelfSLLoss(nn.Module):
         super().__init__()
         self.alpha = alpha
 
-    def forward(self, M_pred: Tensor, M_target: Tensor, X_pred: Tensor, X_target: Tensor) -> float:
+    def forward(
+        self, M_pred: Tensor, M_target: Tensor, X_pred: Tensor, X_target: Tensor
+    ) -> float:
         mask_loss = nn.BCELoss()
         feature_loss = nn.MSELoss()
         return mask_loss(M_pred, M_target) + self.alpha * feature_loss(X_pred, X_target)
 
 
-def train(dataloader: DataLoader, model: SelfSLNetworks, loss_fn: SelfSLLoss, optimizer: Optimizer, p_m = 0.2) -> None:
+def train(
+    dataloader: DataLoader,
+    model: SelfSLNetworks,
+    loss_fn: SelfSLLoss,
+    optimizer: Optimizer,
+    device: str,
+    p_m=0.2,
+) -> None:
     size = len(dataloader.dataset)  # type: ignore
     model.train()
     for batch, X in enumerate(dataloader):
+        X: Tensor = X.to(device)
         # pretext generate
-        M, X_tilde = pretext_generator(X, p_m)
+        M, X_tilde = pretext_generator(X, p_m, device)
 
         # compute prediction and loss
         M_pred, X_pred = model(X_tilde)
