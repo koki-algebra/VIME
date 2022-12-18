@@ -86,7 +86,12 @@ class SemiSLNetworks(nn.Module):
                 p_m=p_m,
                 K=K,
             )
-            test(dataloader=test_dataloader, model=model, loss_fn=test_loss_fn, device=device)
+            test(
+                dataloader=test_dataloader,
+                model=model,
+                loss_fn=test_loss_fn,
+                device=device,
+            )
         print("Done!")
 
 
@@ -163,7 +168,10 @@ def train(
 
 
 def test(
-    dataloader: DataLoader, model: SemiSLNetworks, loss_fn: nn.CrossEntropyLoss, device: str
+    dataloader: DataLoader,
+    model: SemiSLNetworks,
+    loss_fn: nn.CrossEntropyLoss,
+    device: str,
 ) -> None:
     size = len(dataloader.dataset)  # type: ignore
     num_batches = len(dataloader)
@@ -173,7 +181,7 @@ def test(
         for X, y in dataloader:
             X: Tensor = X.to(device)
             y: Tensor = y.to(device)
-            
+
             y_logits = model(X)
             y_prob = softmax(input=y_logits, dim=1)
 
